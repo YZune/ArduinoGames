@@ -1,6 +1,6 @@
 #include <Keypad.h>
-
 #include "U8glib.h"//引用U8G头文件
+#include"MsTimer2.h"
 U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE);//设置设备名称：I2C-SSD1306-128*64(OLED)
 /***********************************************/
 #define UP 5//定义方向键上为Arduino上的D5号引脚
@@ -11,9 +11,8 @@ U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE);//设置设备名称：I2C-SSD1306-1
 /***********************************************/
 int box_x = 0;//定义变量
 int box_y = 0;//定义变量
-//int box_width = 2;
-int box_x_length = 98;//x方向32  0-31
-int box_y_length = 62;//y方向20  0-19
+int box_x_length = 126;//x方向42  0-41
+int box_y_length = 51;//y方向16  0-15
 int snake_max_length = 100; //蛇身体最大长度
 int snake_x[100];//蛇身x坐标
 int snake_y[100];//蛇身y坐标
@@ -23,6 +22,7 @@ int food_y;//食物位置坐标y
 int snake_length = 3; //定义初始化蛇身长度
 unsigned int game_speed;//设置游戏速度
 int notPause = 1;
+int key = 0;
 /***********************************************/
 const byte ROWS = 2;
 const byte COLS = 2;
@@ -37,10 +37,11 @@ byte colPins[COLS] = {3, 2};
 //initialize an instance of class NewKeypad
 Keypad customKeypad = Keypad( makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS);
 /***********************************************/
-
 void setup(void)
 {
   pinMode(A, INPUT_PULLUP);//定义按键A引脚状态
+  MsTimer2::set(0, read_key);//定时器中断按键的扫描
+  MsTimer2::start();
   welcome();//欢迎界面
   delay(2000);
   choose_game();//选择界面
@@ -71,17 +72,16 @@ int choose_game()//对选择界面进行定义
   int temp = 1;
   while (flag)
   {
-    int key = read_key();
     if (key == UP)
     {
       u8g.firstPage();
       do
       {
         u8g.setFont(u8g_font_9x18);
-        u8g.setPrintPos(5, 20);
-        u8g.print("Snake  <");
-        u8g.setPrintPos(5, 40);
-        u8g.print("Player");
+        u8g.setPrintPos(0, 20);
+        u8g.print("Start  <");
+        u8g.setPrintPos(0, 40);
+        u8g.print("Settings");
       } while (u8g.nextPage());
       temp = 1;
     }
@@ -91,10 +91,10 @@ int choose_game()//对选择界面进行定义
       do
       {
         u8g.setFont(u8g_font_9x18);
-        u8g.setPrintPos(5, 20);
-        u8g.print("Snake");
-        u8g.setPrintPos(5, 40);
-        u8g.print("Player  <");
+        u8g.setPrintPos(0, 20);
+        u8g.print("Start");
+        u8g.setPrintPos(0, 40);
+        u8g.print("Settings  <");
       } while (u8g.nextPage());
       temp = 2;
     }
@@ -105,36 +105,29 @@ int choose_game()//对选择界面进行定义
   }
 }
 /***********************************************/
-int read_key()//对按键进行定义
+void read_key()//对按键进行定义
 {
   char customKey = customKeypad.getKey();
-  int key_temp;
-
   if (customKey == '3') {
-    key_temp = UP;
-    return key_temp;
+    key = UP;
   }
-  if (customKey == '2') {
-    key_temp = DOWN;
-    return key_temp;
+  else if (customKey == '2') {
+    key = DOWN;
   }
-  if (customKey == '4') {
-    key_temp = LEFT;
-    return key_temp;
+  else if (customKey == '4') {
+    key = LEFT;
   }
-  if (customKey == '1') {
-    key_temp = RIGHT;
-    return key_temp;
+  else if (customKey == '1') {
+    key = RIGHT;
   }
-  if (digitalRead(A) == LOW) {
-    key_temp = A;
-    return key_temp;
+  else if (digitalRead(A) == LOW) {
+    key = A;
   }
-  return 0;
 }
 /***********************************************/
 void game_over()//对游戏结束进行定义
 {
+  key = 0;
   u8g.firstPage();
   do
   {
@@ -149,9 +142,7 @@ void game_over()//对游戏结束进行定义
     u8g.setFont(u8g_font_9x18);
     u8g.setPrintPos(0, 56);
     u8g.print((snake_length - 3) * 5);
-  }
-
-  while (u8g.nextPage());
+  } while (u8g.nextPage());
   snake_length = 3;
   snake_x[0] = 15; snake_y[0] = 15;//snake起始坐标
   snake_x[1] = snake_x[0]  - 1; snake_y[1] = snake_y[0];//snake起始坐标
@@ -165,47 +156,50 @@ void snake()//对贪吃蛇参数进行定义
   snake_x[1] = snake_x[0]  - 1; snake_y[1] = snake_y[0];//snake起始坐标
   snake_x[2] = snake_x[1]  - 1; snake_y[2] = snake_y[1];//snake起始坐标
   int snake_dir = RIGHT; //初始方向 right
-  game_speed = 30;
   int food_flag = 1;
-  Serial.println("snake!");
   food();
   while (flag)
   {
     snake_frame(game_speed);
     delay(game_speed);
-    switch (read_key())
+    switch (key)
     {
       case UP:
         notPause = 1;
         if (snake_dir != DOWN)
         {
           snake_dir = UP;
-          break;
         }
+        break;
+
       case DOWN:
         notPause = 1;
         if (snake_dir != UP)
         {
           snake_dir = DOWN;
-          break;
         }
+        break;
+
       case LEFT:
         notPause = 1;
         if (snake_dir != RIGHT)
         {
           snake_dir = LEFT;
-          break;
         }
+        break;
+
       case RIGHT:
         notPause = 1;
         if (snake_dir != LEFT)
         {
           snake_dir = RIGHT;
-          break;
         }
+        break;
+
       case A:
         notPause = 0;
         break;
+
       default: break;
     }
     if (snake_eat_food(snake_dir) == 1)
@@ -254,14 +248,14 @@ void snake_frame(int s)
   {
     u8g.drawFrame(box_x, box_y, box_x_length, box_y_length);
     u8g.setFont(u8g_font_5x8);
-    u8g.setPrintPos(box_x_length + 1, 12);
+    u8g.setPrintPos(0, box_y_length + 6);
     u8g.print("Score");
-    u8g.setPrintPos(box_x_length + 1, 22);
+    u8g.setPrintPos(32, box_y_length + 6);
     u8g.print((snake_length - 3) * 5);
-    u8g.setPrintPos(box_x_length + 1, 46);
-    u8g.print("Speed");
-    u8g.setPrintPos(box_x_length + 1, 56);
-    u8g.print(30 - s);
+    //    u8g.setPrintPos(box_x_length + 1, 46);
+    //    u8g.print("Speed");
+    //    u8g.setPrintPos(box_x_length + 1, 56);
+    //    u8g.print(30 - s);
     u8g.drawFrame(food_x * snake_body_width + 1, food_y * snake_body_width + 1, snake_body_width, snake_body_width); //显示食物
     for (int i = 0; i < snake_length; i++)//显示snake
     {
@@ -384,7 +378,7 @@ int snake_knock_wall(int dir)
     case LEFT : x_temp -= 1; break;
     case RIGHT : x_temp += 1; break;
   }
-  if (x_temp < 0 || x_temp > 31 || y_temp < 0 || y_temp > 19)
+  if (x_temp < 0 || x_temp > 40 || y_temp < 0 || y_temp > 15)
   {
     return 1;
   }
@@ -415,35 +409,21 @@ int snake_eat_body(int dir)
   return 0;
 }
 /***********************************************/
-//使用说明（player)主函数
-void tetrs()
+void settings()
 {
   int flag = 1;
   while (flag)
   {
-    u8g.firstPage();
-    do
-    {
-      u8g.setFont(u8g_font_gdr14r);
-      u8g.setPrintPos(0, 20);
-      u8g.print("1.UP:chose1");
-      u8g.setPrintPos(1, 40);
-      u8g.print("2:start is:A");
-    } while (u8g.nextPage());
-    delay(1000);
-    flag = 0;
+    
   }
 }
 /***********************************************/
 void loop(void)//主循环函数
 {
-  while (1)
+  switch (choose_game())
   {
-    switch (choose_game())
-    {
-      case 1: snake(); break;
-      case 2: tetrs(); break;
-      default: break;
-    }
+    case 1: snake(); break;
+    case 2: settings(); break;
+    default: break;
   }
 }
