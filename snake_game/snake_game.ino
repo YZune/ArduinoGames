@@ -9,6 +9,81 @@ U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE);//设置设备名称：I2C-SSD1306-1
 #define RIGHT 2//定义方向键上为Arduino上的D2号引脚
 #define A 8//定义方向键上为Arduino上的D8号引脚
 /***********************************************/
+#define A0 -1
+#define A1 441
+#define A2 495
+#define A3 556
+#define A4 589
+#define A5 661
+#define A6 742
+#define A7 833
+
+#define AL1 221
+#define AL2 248
+#define AL3 278
+#define AL4 294
+#define AL5 330
+#define AL6 371
+#define AL7 416
+
+#define AH1 882
+#define AH2 990
+#define AH3 1112
+#define AH4 1178
+#define AH5 1322
+#define AH6 1484
+#define AH7 1665
+//以上部分是定义是把每个音符和频率值对应起来，其实不用打这么多，但是都打上了，后面可以随意编写A调的各种歌，我这里用A+数字表示音符，AH+数字表示上面有点的那种音符，AL+数字表示下面有点的那种音符。这样后面写起来比较好识别。
+#define WHOLE 1
+#define HALF 0.5
+#define QUARTER 0.25
+#define EIGHTH 0.25
+#define SIXTEENTH 0.625
+int tune[] =
+{
+  A3, A5,
+  A6, A0, A0, A5, A6, A0, A0, A5,
+  A6, AH1, A5, A6, A3, A0, A3, A5,
+  A6, A0, A0, A5, A6, A0, A0, A5,
+  A6, AH3, AH1, AH2, A6, A0, A3, A5,
+  A6, A0, A0, A5, A6, A0, A0, A5,
+  A6, AH1, A5, A6, A3, A5, A1, A2,
+  A3, AH1, A6, AH3,
+  AH2, AH3, AH2, AH1, AH2, A6, A0,
+  A6, A6, A6, A6, AH1, AH2, AH3,
+  A6, A6, A6, A5, A5, A6,
+  A6, A6, A6, A6, AH1, AH2, AH3,
+  A6, A6, A6, AH4, AH4, AH3,
+  A6, A6, A6, A6, AH1, AH2, AH3,
+  A6, A6, A6, A5, A5, A6,
+  A6, A6, A6, A6, AH1, AH2, AH3,
+  AH6, A5, A5, A6, A6
+};//这部分就是整首曲子的音符部分,用了一个序列定义为tune，整数
+
+float duration[] =
+{
+  0.5, 0.5,
+  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
+  1, 1, 1, 1,
+  0.5, 0.25, 0.25, 0.5, 0.5, 1, 1,
+  1, 1, 1, 0.25, 0.25, 0.25, 0.25,
+  1, 1, 0.5, 0.5, 0.5, 0.5,
+  1, 1, 1, 0.25, 0.25, 0.25, 0.25,
+  1, 1, 0.5, 0.5, 0.5, 0.5,
+  1, 1, 1, 0.25, 0.25, 0.25, 0.25,
+  1, 1, 0.5, 0.5, 0.5, 0.5,
+  1, 1, 1, 0.25, 0.25, 0.25, 0.25,
+  1 + 0.5, 0.5, 0.5, 0.5, 1
+};//这部分是整首曲子的接拍部分，也定义个序列duration，浮点（数组的个数和前面音符的个数是一样的，一一对应么）
+int length;//这里定义一个变量，后面用来表示共有多少个音符
+int tonePin = 10; //蜂鸣器的pin
+int toneIndex = 0;
+/***********************************************/
 int box_x = 0;//定义变量
 int box_y = 0;//定义变量
 int box_x_length = 126;//x方向42  0-41
@@ -39,8 +114,10 @@ Keypad customKeypad = Keypad( makeKeymap(hexaKeys), rowPins, colPins, ROWS, COLS
 /***********************************************/
 void setup(void)
 {
+  pinMode(tonePin, OUTPUT); //设置蜂鸣器的pin为输出模式
+  length = sizeof(tune) / sizeof(tune[0]); //这里用了一个sizeof函数，可以查出tone序列里有多少个音符
   pinMode(A, INPUT_PULLUP);//定义按键A引脚状态
-  MsTimer2::set(0, read_key);//定时器中断按键的扫描
+  MsTimer2::set(1, read_key);//定时器中断按键的扫描
   MsTimer2::start();
   welcome();//欢迎界面
   delay(2000);
@@ -156,6 +233,7 @@ void snake()//对贪吃蛇参数进行定义
   snake_x[1] = snake_x[0]  - 1; snake_y[1] = snake_y[0];//snake起始坐标
   snake_x[2] = snake_x[1]  - 1; snake_y[2] = snake_y[1];//snake起始坐标
   int snake_dir = RIGHT; //初始方向 right
+  game_speed = 30;
   int food_flag = 1;
   food();
   while (flag)
@@ -414,16 +492,28 @@ void settings()
   int flag = 1;
   while (flag)
   {
-    
+    delay(500);
+    flag = 0;
   }
 }
 /***********************************************/
-void loop(void)//主循环函数
+void loop()//主循环函数
 {
   switch (choose_game())
   {
     case 1: snake(); break;
     case 2: settings(); break;
     default: break;
+  }
+  for (int x = 0; x < length; x++) //循环音符的次数
+  {
+    tone(tonePin, tune[x]); //此函数依次播放tune序列里的数组，即每个音符
+    if (key != 0) {
+      noTone(tonePin);
+      break;
+    } else {
+      delay(450 * duration[x]); //每个音符持续的时间，即节拍duration，400是调整时间的越大，曲子速度越慢，越小曲子速度越快，自己掌握吧
+    }
+    noTone(tonePin);//停止当前音符，进入下一音符
   }
 }
