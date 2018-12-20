@@ -1,6 +1,8 @@
 #include <Keypad.h>
 #include "U8glib.h"//引用U8G头文件
 #include"MsTimer2.h"
+#include <IRremote.h>
+#include <TonePlayer.h>
 U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE);//设置设备名称：I2C-SSD1306-128*64(OLED)
 /***********************************************/
 #define UP 5//定义方向键上为Arduino上的D5号引脚
@@ -34,54 +36,18 @@ U8GLIB_SSD1306_128X64 u8g(U8G_I2C_OPT_NONE);//设置设备名称：I2C-SSD1306-1
 #define AH6 1484
 #define AH7 1665
 //以上部分是定义是把每个音符和频率值对应起来，其实不用打这么多，但是都打上了，后面可以随意编写A调的各种歌，我这里用A+数字表示音符，AH+数字表示上面有点的那种音符，AL+数字表示下面有点的那种音符。这样后面写起来比较好识别。
-#define WHOLE 1
-#define HALF 0.5
-#define QUARTER 0.25
-#define EIGHTH 0.25
-#define SIXTEENTH 0.625
+
 int tune[] =
 {
-  A3, A5,
-  A6, A0, A0, A5, A6, A0, A0, A5,
-  A6, AH1, A5, A6, A3, A0, A3, A5,
-  A6, A0, A0, A5, A6, A0, A0, A5,
-  A6, AH3, AH1, AH2, A6, A0, A3, A5,
-  A6, A0, A0, A5, A6, A0, A0, A5,
-  A6, AH1, A5, A6, A3, A5, A1, A2,
-  A3, AH1, A6, AH3,
-  AH2, AH3, AH2, AH1, AH2, A6, A0,
-  A6, A6, A6, A6, AH1, AH2, AH3,
-  A6, A6, A6, A5, A5, A6,
-  A6, A6, A6, A6, AH1, AH2, AH3,
-  A6, A6, A6, AH4, AH4, AH3,
-  A6, A6, A6, A6, AH1, AH2, AH3,
-  A6, A6, A6, A5, A5, A6,
-  A6, A6, A6, A6, AH1, AH2, AH3,
-  AH6, A5, A5, A6, A6
+  A0, A5, A6, A7, AH2, AH1, A3, A5, A5
 };//这部分就是整首曲子的音符部分,用了一个序列定义为tune，整数
 
 float duration[] =
 {
-  0.5, 0.5,
-  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5,
-  1, 1, 1, 1,
-  0.5, 0.25, 0.25, 0.5, 0.5, 1, 1,
-  1, 1, 1, 0.25, 0.25, 0.25, 0.25,
-  1, 1, 0.5, 0.5, 0.5, 0.5,
-  1, 1, 1, 0.25, 0.25, 0.25, 0.25,
-  1, 1, 0.5, 0.5, 0.5, 0.5,
-  1, 1, 1, 0.25, 0.25, 0.25, 0.25,
-  1, 1, 0.5, 0.5, 0.5, 0.5,
-  1, 1, 1, 0.25, 0.25, 0.25, 0.25,
-  1 + 0.5, 0.5, 0.5, 0.5, 1
+  0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5, 0.5
 };//这部分是整首曲子的接拍部分，也定义个序列duration，浮点（数组的个数和前面音符的个数是一样的，一一对应么）
 int length;//这里定义一个变量，后面用来表示共有多少个音符
-int tonePin = 10; //蜂鸣器的pin
+int tonePin = 9; //蜂鸣器的pin
 int toneIndex = 0;
 /***********************************************/
 int box_x = 0;//定义变量
@@ -98,6 +64,8 @@ int snake_length = 3; //定义初始化蛇身长度
 unsigned int game_speed;//设置游戏速度
 int notPause = 1;
 int key = 0;
+unsigned int timerCount = 0;
+TonePlayer tone1 (TCCR1A, TCCR1B, OCR1AH, OCR1AL, TCNT1H, TCNT1L);
 /***********************************************/
 const byte ROWS = 2;
 const byte COLS = 2;
@@ -184,6 +152,7 @@ int choose_game()//对选择界面进行定义
 /***********************************************/
 void read_key()//对按键进行定义
 {
+  timerCount++;
   char customKey = customKeypad.getKey();
   if (customKey == '3') {
     key = UP;
@@ -200,6 +169,18 @@ void read_key()//对按键进行定义
   else if (digitalRead(A) == LOW) {
     key = A;
   }
+
+  if (timerCount % int((450 * duration[toneIndex] + 1)) == 0) {
+    tone1.noTone();//停止当前音符，进入下一音符
+    if (toneIndex < length) {
+      toneIndex++;
+    } else {
+      toneIndex = 0;
+    }
+  }else{
+    tone1.tone(tune[toneIndex]); //此函数依次播放tune序列里的数组，即每个音符
+  }
+
 }
 /***********************************************/
 void game_over()//对游戏结束进行定义
@@ -505,15 +486,15 @@ void loop()//主循环函数
     case 2: settings(); break;
     default: break;
   }
-  for (int x = 0; x < length; x++) //循环音符的次数
-  {
-    tone(tonePin, tune[x]); //此函数依次播放tune序列里的数组，即每个音符
-    if (key != 0) {
-      noTone(tonePin);
-      break;
-    } else {
-      delay(450 * duration[x]); //每个音符持续的时间，即节拍duration，400是调整时间的越大，曲子速度越慢，越小曲子速度越快，自己掌握吧
-    }
-    noTone(tonePin);//停止当前音符，进入下一音符
-  }
+  //    for (int x = 0; x < length; x++) //循环音符的次数
+  //    {
+  //      tone1.tone(tune[x]); //此函数依次播放tune序列里的数组，即每个音符
+  //      if (key != 0) {
+  //        tone1.noTone();
+  //        break;
+  //      } else {
+  //        delay(450 * duration[x]); //每个音符持续的时间，即节拍duration，400是调整时间的越大，曲子速度越慢，越小曲子速度越快，自己掌握吧
+  //      }
+  //      tone1.noTone();//停止当前音符，进入下一音符
+  //    }
 }
